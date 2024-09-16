@@ -30,7 +30,8 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "veml7700.h"
-#include "log2lut.h"
+#include "camera_params.h"
+
 //#include "ssd1306_conf.h"
 /* USER CODE END Includes */
 
@@ -59,29 +60,23 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-const uint8_t aperture_x1_pos = 5;
-const uint8_t aperture_x2_pos = 60;
-const uint8_t aperture_y1_pos = 45;
-const uint8_t aperture_y2_pos = 60;
 
-const uint8_t aperture_time_x1_pos = 65;
-const uint8_t aperture_time_x2_pos = 125;
-const uint8_t aperture_time_y1_pos = 45;
-const uint8_t aperture_time_y2_pos = 60;
+APERTURE_RECTANGLE_POS_t aperture_coordinates = {5, 60, 45, 60};
+EXPOSURE_RECTANGLE_POS_t exposure_coordinates = {65, 125, 45, 60};
+
 
 volatile uint8_t state = 0;
 volatile uint32_t counter = 0;
-char counter_msg[15];
 
-double ApertureF = 2.8;
-uint16_t ApertureTime = 8;
+double aperture_f = 2.8;
+uint16_t exposure_time = 8;
 uint8_t EV = 0;
 
-uint8_t Aperture_time_list_index = 1;
-uint8_t Aperture_list_index = 0;
+uint8_t exposure_time_list_index = 1;
+uint8_t aperture_f_list_index = 0;
 
-uint16_t Aperture_time_list[APERTURE_TIME_TABLE_SIZE] = {8, 15, 30, 60, 125, 250, 500};
-double Aperture_list[APERTURE_F_TABLE_SIZE] = {2.8, 4.0, 5.6, 8.0, 11.0, 16.0, 22.0};
+//uint16_t exposure_times_list[APERTURE_TIME_TABLE_SIZE] = {8, 15, 30, 60, 125, 250, 500};
+//double apertures_f_list[APERTURE_F_TABLE_SIZE] = {2.8, 4.0, 5.6, 8.0, 11.0, 16.0, 22.0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,7 +87,22 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint16_t closest_to_integer(uint16_t value, uint16_t *arr, size_t size) {
+void set_initial_veml_params(veml6030 veml){
+	veml6030_init(&veml, &hi2c1, VEML6030_I2C_ADDRESS);
+	veml6030_power_on(&veml);
+	veml6030_set_als_integration_time(&veml, REG_ALS_CONF_IT25);
+	veml6030_set_als_gain(&veml, REG_ALS_CONF_GAIN_1_8);
+}
+
+void display_initial_description(void){
+	ssd1306_SetCursor(0, 30);
+	ssd1306_WriteString("Aperture:", Font_6x8, White);
+	ssd1306_SetCursor(60, 30);
+	ssd1306_WriteString("Exposure:", Font_6x8, White);
+	ssd1306_UpdateScreen();
+}
+
+uint16_t the_closest_integer_from_list(uint16_t value, uint16_t *arr, size_t size) {
 	uint16_t closest = *arr;  // Initialize with the first element
     uint16_t min_diff = abs(value - *arr);  // Compute the absolute difference
 
@@ -108,7 +118,7 @@ uint16_t closest_to_integer(uint16_t value, uint16_t *arr, size_t size) {
 }
 
 
-double closest_to_float(double value, double *arr, size_t size) {
+double the_closest_double_from_list(double value, double *arr, size_t size) {
 	double closest = *arr;  // Initialize with the first element
     double min_diff = fabs(value - *arr);  // Compute the absolute difference
 
@@ -162,17 +172,9 @@ int main(void)
 	HAL_TIM_Encoder_Start_IT(&htim2, TIM_CHANNEL_ALL);
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_ALL);
 	ssd1306_Init();
-	ssd1306_SetCursor(0, 30);
-	ssd1306_WriteString("Aperture:", Font_6x8, White);
-	ssd1306_SetCursor(60, 30);
-	ssd1306_WriteString("Exposure:", Font_6x8, White);
-//	ssd1306_Fill(White);
-	ssd1306_UpdateScreen();
+	display_initial_description();
 	veml6030 veml;
-	veml6030_init(&veml, &hi2c1, VEML6030_I2C_ADDRESS);
-	veml6030_power_on(&veml);
-	veml6030_set_als_integration_time(&veml, REG_ALS_CONF_IT25);
-	veml6030_set_als_gain(&veml, REG_ALS_CONF_GAIN_1_8);
+	set_initial_veml_params(veml);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -185,19 +187,19 @@ int main(void)
 		EV = (uint8_t)(log10(lux_als_correction/2.5)/0.3);
 
 		if (state == 0){
-			ApertureTime = (uint16_t)(1.0/((ApertureF*ApertureF)/(pow(2, EV))));
+			exposure_time = (uint16_t)(1.0/((aperture_f*aperture_f)/(pow(2, EV))));
 			size_t time_list_size = APERTURE_TIME_TABLE_SIZE;
-			ApertureTime = closest_to_integer(ApertureTime, Aperture_time_list, time_list_size);
+			exposure_time = the_closest_integer_from_list(exposure_time, exposure_times_list, time_list_size);
 		}
 		if (state == 1){
-			ApertureF = sqrt(pow(2,EV)*(1.0/ApertureTime));
+			aperture_f = sqrt(pow(2,EV)*(1.0/exposure_time));
 			size_t f_list_size = APERTURE_F_TABLE_SIZE;
-			ApertureF = closest_to_float(ApertureF, Aperture_list, f_list_size);
+			aperture_f = the_closest_double_from_list(aperture_f, apertures_f_list, f_list_size);
 		}
 		if (state == 2){
-			ApertureTime = (uint16_t)(1.0/((ApertureF*ApertureF)/(pow(2, EV))));
+			exposure_time = (uint16_t)(1.0/((aperture_f*aperture_f)/(pow(2, EV))));
 			size_t time_list_size = APERTURE_TIME_TABLE_SIZE;
-			ApertureTime = closest_to_integer(ApertureTime, Aperture_time_list, time_list_size);
+			exposure_time = the_closest_integer_from_list(exposure_time, exposure_times_list, time_list_size);
 		}
 
 		char lux_screen[11];
@@ -212,8 +214,8 @@ int main(void)
 
 		char aperture_screen[8];
 		char time_screen[9];
-		sprintf(aperture_screen,"f/%.1f", ApertureF);
-		sprintf(time_screen,"1/%3d [s]", ApertureTime);
+		sprintf(aperture_screen,"f/%.1f", aperture_f);
+		sprintf(time_screen,"1/%3d [s]", exposure_time);
 		ssd1306_SetCursor(10, 50);
 		ssd1306_WriteString(aperture_screen, Font_6x8, White);
 		ssd1306_SetCursor(70, 50);
@@ -278,12 +280,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == GPIO_PIN_6){
 		state = (state+1)%SETTINGS_NUMBER;
 		if(state == 0){
-			ssd1306_DrawRectangle(aperture_time_x1_pos, aperture_time_y1_pos, aperture_time_x2_pos, aperture_time_y2_pos, Black);
-			ssd1306_DrawRectangle(aperture_x1_pos, aperture_y1_pos, aperture_x2_pos, aperture_y2_pos, White);
+			ssd1306_DrawRectangle(exposure_coordinates.x1, exposure_coordinates.y1, exposure_coordinates.x2, exposure_coordinates.y2, Black);
+			ssd1306_DrawRectangle(aperture_coordinates.x1, aperture_coordinates.y1, aperture_coordinates.x2, aperture_coordinates.y2, White);
 		}
 		else{
-			ssd1306_DrawRectangle(aperture_x1_pos, aperture_y1_pos, aperture_x2_pos, aperture_y2_pos, Black);
-			ssd1306_DrawRectangle(aperture_time_x1_pos, aperture_time_y1_pos, aperture_time_x2_pos, aperture_time_y2_pos, White);
+			ssd1306_DrawRectangle(aperture_coordinates.x1, aperture_coordinates.y1, aperture_coordinates.x2, aperture_coordinates.y2, Black);
+			ssd1306_DrawRectangle(exposure_coordinates.x1, exposure_coordinates.y1, exposure_coordinates.x2, exposure_coordinates.y2, White);
 		}
 //		HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
 	}
@@ -302,30 +304,21 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 		default:
 			break;
 		}
-//		counter++;
-//		HAL_GPIO_TogglePin(GPIOD, LD3_Pin);
 		if(state==0){
-//change aperture -> recalculate aperture time
-//			ssd1306_DrawRectangle(10, 20, 30, 40, White);
-			Aperture_list_index = counter%APERTURE_F_TABLE_SIZE;
-			ApertureF = Aperture_list[Aperture_list_index];
-			//print change value
-			//calculate new settings
-			ApertureTime = (uint16_t)(1.0/((ApertureF*ApertureF)/(pow(2, EV))));
-			size_t time_list_size = APERTURE_TIME_TABLE_SIZE;
-			ApertureTime = closest_to_integer(ApertureTime, Aperture_time_list, time_list_size);
+			//change aperture -> recalculate aperture time
+			aperture_f_list_index = counter%APERTURE_F_TABLE_SIZE;
+			aperture_f = apertures_f_list[aperture_f_list_index];
+			exposure_time = (uint16_t)(1.0/((aperture_f*aperture_f)/(pow(2, EV))));
+			exposure_time = the_closest_integer_from_list(exposure_time, exposure_times_list, APERTURE_TIME_TABLE_SIZE);
 
 
 		}
 		else if(state==1){
-//			ssd1306_DrawRectangle(10, 15, 20, 90, White);
-//change aperture time -> recalculate aperture
-			Aperture_time_list_index = counter%APERTURE_TIME_TABLE_SIZE;
-			ApertureTime = Aperture_time_list[Aperture_time_list_index];
-
-			ApertureF = sqrt(pow(2,EV)*(1/ApertureTime));
-			size_t f_list_size = APERTURE_F_TABLE_SIZE;
-			ApertureF = closest_to_float(ApertureF, Aperture_list, f_list_size);
+			//change aperture time -> recalculate aperture
+			exposure_time_list_index = counter%APERTURE_TIME_TABLE_SIZE;
+			exposure_time = exposure_times_list[exposure_time_list_index];
+			aperture_f = sqrt(pow(2,EV)*(1/exposure_time));
+			aperture_f = the_closest_double_from_list(aperture_f, apertures_f_list, APERTURE_F_TABLE_SIZE);
 		}
 	}
 }

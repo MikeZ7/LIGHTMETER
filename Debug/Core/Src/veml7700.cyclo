@@ -1,0 +1,11 @@
+../Core/Src/veml7700.c:36:17:_write_register	1
+../Core/Src/veml7700.c:43:17:_read_register	2
+../Core/Src/veml7700.c:54:10:veml6030_init	1
+../Core/Src/veml7700.c:64:10:veml6030_power_on	1
+../Core/Src/veml7700.c:73:10:veml6030_shutdown	1
+../Core/Src/veml7700.c:82:10:veml6030_set_als_integration_time	1
+../Core/Src/veml7700.c:90:10:veml6030_get_als_integration_time	1
+../Core/Src/veml7700.c:97:10:veml6030_set_als_gain	1
+../Core/Src/veml7700.c:106:10:veml6030_get_als_gain	1
+../Core/Src/veml7700.c:112:10:veml6030_read_als	1
+../Core/Src/veml7700.c:117:10:veml6030_read_white	1

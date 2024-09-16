@@ -36,7 +36,19 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+typedef struct{
+	uint8_t x1;
+	uint8_t x2;
+	uint8_t y1;
+	uint8_t y2;
+} APERTURE_RECTANGLE_POS_t;
 
+typedef struct{
+	uint8_t x1;
+	uint8_t x2;
+	uint8_t y1;
+	uint8_t y2;
+} EXPOSURE_RECTANGLE_POS_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
