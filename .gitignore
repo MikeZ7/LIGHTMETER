@@ -1,8 +1,8 @@
 .cproject
 .mxproject
 .project
-.ioc
+*.ioc
 /.settings/
-.launch
-.ld
+*.launch
+*.ld
 /Debug/
